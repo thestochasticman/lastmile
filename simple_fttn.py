@@ -36,7 +36,7 @@ class Circle:
 
   def __post_init__(s: Self):
     s.G = nx.MultiDiGraph()
-    s.exchange = str(s.origin)
+    s.exchange = ' '.join(['Exchange', str(s.origin)])
     s.pos = {s.exchange: s.origin}
     s.G.add_node(s.exchange, pos=s.origin, colour='black', size=s.size_exchange_node)
 
@@ -80,7 +80,6 @@ class Circle:
     for seg in range(self.segments_per_ring):
       angle_start = (seg / self.segments_per_ring) * 2 * np.pi
       angle_end = ((seg + 1) / self.segments_per_ring) * 2 * np.pi
-
       for i in range(1, per_segment + 1):
         frac = i / (per_segment + 1)  # e.g., 1/4, 1/2, 3/4 for per_segment = 3
         mid_angle = angle_start + frac * (angle_end - angle_start)
@@ -88,36 +87,27 @@ class Circle:
         y = radius * np.sin(mid_angle) + self.origin_y
         name = f"I_R{ring}_M{seg}_{i}"
         self.pos[name] = (x, y)
-        self.G.add_node(name, pos=(x, y), colour='purple', size=self.size_intersection_node)
-
+        self.G.add_node(
+          name,
+          pos=(x, y),
+          colour='purple',
+          size=self.size_intersection_node
+        )
 
   def add_fiber_from_exchange_to_default_ir(s: Self):
     for node in s.G.nodes:
       if node.startswith('I_R'):
         s.G.add_edge(s.exchange, node, length=s.dist(s.exchange, node), type='fiber_1')
 
-  def add_fiber_from_exchange_to_extra_ir_in_third_ring(s: Self):
-    ir3 = [node for node in s.G.nodes if node.startswith('I_R3')]
-    ir3_mid = [node for node in ir3 if node.startswith('I_R3_M')]
-    ir3_old = [node for node in ir3 if not node.startswith('I_R3_M')]
-
-    for node in ir3_mid:
-      dists = {}
-      for old_ir_node in ir3_old: dists[old_ir_node] = s.arcdist(old_ir_node, node)
-      selected = next(iter(sort_dict_by_values(dists)))
-
-      s.G.add_edge(selected, node, length=dists[selected], type='fiber_2')
-      s.G.add_edge(s.exchange, selected, length=s.dist(s.exchange, selected), type='fiber_2')
-  
-  def add_fiber_from_exchange_to_extra_ir_in_fourth_ring(s: Self):
-    ir4 = [node for node in s.G.nodes if node.startswith('I_R4')]
-    ir4_mid = [node for node in ir4 if node.startswith('I_R4_M')]
-    ir4_old = [node for node in ir4 if not node.startswith('I_R4_M')]
+  def add_fiber_from_exchange_to_extra_ir(s: Self, ring: str):
+    ir = [node for node in s.G.nodes if node.startswith('I_R' + str(ring))]
+    ir_mid = [node for node in ir if node.startswith('I_R' + str(ring) + '_M')]
+    ir_old = [node for node in ir if not node.startswith('I_R' + str(ring) + '_M')]
 
     visited = []
-    for node in ir4_mid:
+    for node in ir_mid:
       dists = {}
-      for old_ir_node in ir4_old: dists[old_ir_node] = s.arcdist(old_ir_node, node)
+      for old_ir_node in ir_old: dists[old_ir_node] = s.arcdist(old_ir_node, node)
       selected = next(iter(sort_dict_by_values(dists)))
       if selected in visited:
         s.G.add_edge(selected, node, length=dists[selected], type='fiber_4')
@@ -127,7 +117,8 @@ class Circle:
         s.G.add_edge(s.exchange, selected, length=s.dist(s.exchange, selected), type='fiber_3')
         visited += [selected]
 
-  def connect_new_ir_to_closest_ir(s: Self):
+
+  def connect_new_ir_to_closest_ir(s: Self, ring):
     ir = [node for node in s.G.nodes if node.startswith('I_R')]
     old_ir = [node for node in ir if 'M' not in node]
     new_ir = [node for node in ir if 'M' in node]
@@ -173,10 +164,7 @@ class Circle:
       s.G.add_edge(selected, drw_node, length=s.arcdist(selected, drw_node), type='copper_1')
   
   def check_if_all_driveways_connected(s: Self):
-    drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
-    out = []
-    for drw_node in drw_nodes: out += [nx.has_path(s.G, s.exchange, drw_node)]
-    return all(out)
+    return all([nx.has_path(s.G, s.exchange, n) for n in s.drw_nodes])
   
   def compute_total_fiber_nodes(s: Self):
     return len([node for node in s.G.nodes if node.startswith('I_R')])
@@ -198,7 +186,6 @@ class Circle:
     speeds = {}
     for drw, dist in copper_edge_info:
       speeds[drw] = (s.estimate_speed(dist))
-    
     s.speeds = speeds
     return speeds
   
@@ -215,7 +202,6 @@ class Circle:
       Patch(facecolor='Purple', edgecolor='black', label='FTTN Node (Not Intersection)')
     ]
   )
-
 
   def plot_dotted_circle(s: Self, ax: Axes, radius, colour='blue'):
     theta = np.linspace(0, 2 * np.pi, 300)
@@ -264,51 +250,63 @@ class Circle:
       y1 = y0 + self.radii_km[-1] * np.sin(angle)
       ax.plot([x0, x1], [y0, y1], color=color, linewidth=linewidth)
 
-  def plot_nodes(s: Self):
-    fig, ax = plt.subplots(figsize=(16, 16))
-    ax.set_aspect('equal', adjustable='box')
-    nx.draw_networkx_nodes(s.G, s.pos, s.G.nodes, s.node_sizes, s.node_colours, ax=ax)
-    s.plot_radial_segments(ax)
-    s.plot_rings(ax)
-
   def plot(s: Self):
     fig, ax = plt.subplots(figsize=(16, 16))
     ax.set_aspect('equal', adjustable='box')
     nx.draw_networkx_nodes(s.G, s.pos, s.G.nodes, s.node_sizes, s.node_colours, ax=ax)
     s.plot_radial_segments(ax)
     s.plot_rings(ax)
-    s.plot_edges(ax, 'fiber_1', 'orange', 'arc3,rad=0.3', width=1)
-    s.plot_edges(ax, 'fiber_2', 'violet', 'arc3,rad=-0.3', width=1)
-    c.plot_edges(ax, 'fiber_3', 'violet', 'arc3,rad=0.5', width=1)
-    c.plot_edges(ax, 'fiber_4', 'violet', 'arc3,rad=-0.5', width=1)
-    c.plot_edges(ax, 'copper_1', 'brown', 'arc3,rad=1.0', width=0.75)
-    ax.legend(handles=s.legend_elements, loc='upper right', fontsize='large')
+    
+    s.plot_edges(ax, 'fiber_1', 'orange', 'arc3,rad=0.3', width=2)
+    s.plot_edges(ax, 'fiber_2', 'violet', 'arc3,rad=-0.3', width=2)
+    c.plot_edges(ax, 'fiber_3', 'violet', 'arc3,rad=0.5', width=2)
+    c.plot_edges(ax, 'fiber_4', 'violet', 'arc3,rad=-0.5', width=2)
+    c.plot_edges(ax, 'copper_1', 'brown', 'arc3,rad=1.0', width=2)
+    ax.legend(handles=s.legend_elements, loc='lower right', fontsize='16')
     ax.set_title('FTTN Peer 2 Peer + Copper Cable', fontsize=20)
+    fig.text(0.5, 0.02, 'Fig 1.5', ha='right', fontsize=30, color='gray')
     fig.tight_layout()
     fig.savefig('simple_fttn.png')
     plt.show()
 
-    
+  def plot_speeds_histogram(s: Self):
+    fig, ax = plt.subplots(figsize=(16, 16))
+    # ax.set_aspect('equal', adjustable='box')
+    speeds = list(s.speeds.values())
+    # ax.hist(x=speeds, bins=5, histtype='stepfilled', facecolor='blue', linewidth=2, edgecolor='black')
+    counts, bins, patches = ax.hist(speeds, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
+    for bin_edge in bins:
+      ax.axvline(bin_edge, color='gray', linestyle='--', linewidth=0.8)
+    ax.axvline(x=50, color='red', linestyle=':', linewidth=2)
+    plt.show()
   
 if __name__ == '__main__':
   c = Circle()
   c.add_intersection_nodes()
   c.add_fiber_from_exchange_to_default_ir()
-  c.add_extra_intersections_on_ring(3, 1)
-  c.add_extra_intersections_on_ring(4, 2)
-  c.add_fiber_from_exchange_to_extra_ir_in_third_ring()
-  c.add_fiber_from_exchange_to_extra_ir_in_fourth_ring()
+  c.add_extra_intersections_on_ring(ring=2, per_segment=1)
+  c.add_extra_intersections_on_ring(ring=3, per_segment=1)
+  c.add_extra_intersections_on_ring(ring=4, per_segment=2)
+  c.add_fiber_from_exchange_to_extra_ir(ring=2)
+  c.add_fiber_from_exchange_to_extra_ir(ring=3)
+  c.add_fiber_from_exchange_to_extra_ir(ring=4)
   c.add_driveway_nodes()
   c.add_copper_to_each_drw_from_closest_ir()
-
-  
   if c.check_if_all_driveways_connected():
-  
+    c.estimate_speed_per_drw()
     print('Congratulations !!!!', 'All driveways have connection to exchange')
+    print('total fiber in km: ', c.compute_total_fiber_in_km())
+    print('total copper in km: ', c.compute_total_copper_in_km())
+    avg = sum(list(c.speeds.values())) / len(c.speeds)
+    print('average download:', avg)
 
-  print('total fiber in km: ', c.compute_total_fiber_in_km())
-  print('total copper in km: ', c.compute_total_copper_in_km())
   c.plot()
+  
+  
+  c.plot_speeds_histogram()
+  
+
+
   # c.estimate_speed_per_drw()
 
   # for node in c.speeds:
