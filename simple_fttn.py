@@ -1,5 +1,7 @@
 from typing_extensions import Self
 from dataclasses import dataclass
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import matplotlib.pyplot as plt
 from pandas import DataFrame
 from pprint import pprint
@@ -37,27 +39,29 @@ class Circle:
       s.pos[node1][0] - s.pos[node2][0],
       s.pos[node1][1] - s.pos[node2][1]
     )
-    return dist
+    return round(dist, 3)
   
   def arcdist(s: Self, node1: str, node2: str):
-    x1, y1 = s.pos[node1][0], s.pos[node1][1]
-    x2, y2 = s.pos[node2][0], s.pos[node2][1]
+    # x1, y1 = s.pos[node1][0], s.pos[node1][1]
+    # x2, y2 = s.pos[node2][0], s.pos[node2][1]
 
-    radius = np.hypot(
-      x1 - s.origin_x,
-      x2 - s.origin_y
-    )
-    dot = x1 * x2 + y1 * y2
-    mag1 = math.sqrt(x1**2 + y1**2)
-    mag2 = math.sqrt(x2**2 + y2**2)
-    cos_theta = dot / (mag1 * mag2)
+    # radius = np.hypot(
+    #   x1 - s.origin_x,
+    #   x2 - s.origin_y
+    # )
+    # dot = x1 * x2 + y1 * y2
+    # mag1 = math.sqrt(x1**2 + y1**2)
+    # mag2 = math.sqrt(x2**2 + y2**2)
+    # cos_theta = dot / (mag1 * mag2)
     
-    # Clamp value to avoid floating point issues
-    cos_theta = max(min(cos_theta, 1.0), -1.0)
+    # # Clamp value to avoid floating point issues
+    # cos_theta = max(min(cos_theta, 1.0), -1.0)
     
-    theta = math.acos(cos_theta)  # in radians
-    arc_length = radius * theta
-    return arc_length
+    # theta = math.acos(cos_theta)  # in radians
+    # arc_length = radius * theta
+
+    # return round(arc_length, 3)
+    return s.dist(node1, node2)
   
   def add_intersection_nodes(s: Self):
     num_circles = len(s.radii_km)
@@ -110,6 +114,22 @@ class Circle:
       name2 = f"I_R4_M{i}_2"
       s.pos[name2] = (x2, y2)
       s.G.add_node(name2, pos=(x2, y2))
+  
+  def add_extra_intersections_on_ring(self, ring: int, per_segment: int):
+    radius = self.radii_km[ring - 1]
+    for seg in range(self.segments_per_ring):
+      angle_start = (seg / self.segments_per_ring) * 2 * np.pi
+      angle_end = ((seg + 1) / self.segments_per_ring) * 2 * np.pi
+
+      for i in range(1, per_segment + 1):
+        frac = i / (per_segment + 1)  # e.g., 1/4, 1/2, 3/4 for per_segment = 3
+        mid_angle = angle_start + frac * (angle_end - angle_start)
+        x = radius * np.cos(mid_angle) + self.origin_x
+        y = radius * np.sin(mid_angle) + self.origin_y
+        name = f"I_R{ring}_M{seg}_{i}"
+        self.pos[name] = (x, y)
+        self.G.add_node(name, pos=(x, y))
+
 
   def add_fiber_from_exchange_to_default_ir(s: Self):
     for node in s.G.nodes:
@@ -125,6 +145,7 @@ class Circle:
       dists = {}
       for old_ir_node in ir3_old: dists[old_ir_node] = s.arcdist(old_ir_node, node)
       selected = next(iter(sort_dict_by_values(dists)))
+
       s.G.add_edge(selected, node, length=dists[selected], type='fiber_2')
       s.G.add_edge('Exchange', selected, length=s.dist('Exchange', selected), type='fiber_2')
   
@@ -176,36 +197,48 @@ class Circle:
           s.G.add_node(driveway_name, pos=(road_x, road_y))
           s.pos[driveway_name] = (road_x, road_y)
 
-  # def add_copper_from_ir_to_two_drw(s: Self):
-  #   ir = [n for n in s.G.nodes if n.startswith('I_R')]
-  #   drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
-  #   for ir_node in ir:
-  #     dists = {}
-  #     for drw_node in drw_nodes:
-  #       dists[drw_node] = s.dist(ir_node, drw_node)
-      
-  #     dist_iter = iter(sort_dict_by_values(dists))
-  #     for i in range(2):
-  #       selected = next(dist_iter)
-  #       s.G.add_edge(ir_node, selected, length=s.arcdist(selected, ir_node), type='copper_1')
-
   def add_copper_to_each_drw_from_closest_ir(s: Self):
     ir_nodes = [n for n in s.G.nodes if n.startswith('I_R')]
     drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
 
     for drw_node in drw_nodes:
       dists = {}
+      _dists = []
       for ir_node in ir_nodes:
         dists[ir_node] = s.dist(ir_node, drw_node)
-      selected = next(iter(sort_dict_by_values(dists)))
-      s.G.add_edge(selected, drw_node, length=s.arcdist(selected, ir_node), type='copper_1')
-      # break
+        # print(s.pos[drw_node], s.pos[ir_node], dists[ir_node])
 
+      sorted_dists = sort_dict_by_values(dists)
+      selected = next(iter(sorted_dists))
+      s.G.add_edge(selected, drw_node, length=s.dist(selected, drw_node), type='copper_1')
+  
   def check_if_all_driveways_connected(s: Self):
     drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
     out = []
     for drw_node in drw_nodes: out += [nx.has_path(s.G, 'Exchange', drw_node)]
     return all(out)
+  
+  def compute_total_fiber_nodes(s: Self):
+    return len([node for node in s.G.nodes if node.startswith('I_R')])
+  
+  def compute_total_fiber_in_km(s: Self):
+    return sum([d.get('length') for u, v, d in s.G.edges(data=True) if d.get('type').startswith('fiber')])
+  
+  def compute_total_copper_in_km(s: Self):
+    return sum([d.get('length') for u, v, d in s.G.edges(data=True) if d.get('type').startswith('copper')])
+  
+  def estimate_speed(s: Self, x: float):
+    x = x * 1000
+    base_speed = 300.0   # Mbps at 0m
+    k = math.log(6) / 400.0  # ensures speed(400m) ≈ 50 Mbps
+    return base_speed * math.exp(-k * x)
+  
+  def estimate_speed_per_drw(s: Self):
+    copper_edge_info = [(v, d.get('length')) for u, v, d in s.G.edges(data=True) if d.get('type').startswith('copper')]
+    speeds = {}
+    for drw, dist in copper_edge_info:
+      speeds[drw] = (s.estimate_speed(dist))
+    return speeds
 
   def plot_dotted_circle(s: Self, radius, colour='blue'):
     theta = np.linspace(0, 2 * np.pi, 300)
@@ -240,11 +273,13 @@ class Circle:
       width=width,
       arrowstyle='-|>'
     )
+    edge_labels = {(u, v): round(d['length'], 1) for u, v, d in c.G.edges(data=True) if 'length' in d and d.get('type') == edge_type}
+    # nx.draw_networkx_edge_labels(c.G, c.pos, edge_labels=edge_labels, font_size=7, label_pos=0.2)
 
   def plot(s: Self):
     labels = {}
     for node in s.G.nodes:
-      labels[node] = node
+      labels[node] = [float(round(c.pos[node][0], 3)), float(round(c.pos[node][1], 3))]
 
     plt.figure(figsize=(10, 10))
     plt.gca().set_aspect('equal', adjustable='box')
@@ -265,11 +300,23 @@ class Circle:
       else: node_sizes.append(10)
 
     nx.draw_networkx_nodes(c.G, c.pos, node_size=node_sizes, node_color=node_colours)
-    # s.plot_edges('fiber_1', 'orange', 'arc3,rad=0.3')
-    # s.plot_edges('fiber_2', 'violet', 'arc3,rad=-0.3')
-    c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5')
-    c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5')
-    c.plot_edges('copper_1', 'brown', 'arc3,rad=0.8', width=0.5)
+    # nx.draw_networkx_labels(c.G, c.pos, labels, font_size=10)
+    s.plot_edges('fiber_1', 'violet', 'arc3,rad=0.3', width=0.75)
+    s.plot_edges('fiber_2', 'violet', 'arc3,rad=-0.3', width=0.75)
+    c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5', width=0.75)
+    c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5', width=0.75)
+    c.plot_edges('copper_1', 'brown', 'arc3,rad=1.0', width=0.5)
+
+
+    legend_elements = [
+    Line2D([0], [0], color='violet', lw=2, label='Fiber Cable'),
+    Line2D([0], [0], color='brown', lw=2, label='Copper Cable'),
+    Patch(facecolor='red', edgecolor='black', label='Driveway (DRW)'),
+    Patch(facecolor='orange', edgecolor='black', label='FTTN Node (Intersection)')
+]
+
+    # Add legend to the plot
+    plt.legend(handles=legend_elements, loc='upper right', fontsize='large')
     plt.savefig('simple_fttn.png')
     plt.show()
 
@@ -278,13 +325,19 @@ if __name__ == '__main__':
   c = Circle()
   c.add_intersection_nodes()
   c.add_fiber_from_exchange_to_default_ir()
-  c.add_one_extra_intersection_node_at_third_ring()
-  c.add_two_extra_intersection_nodes_at_fourth_ring()
+  c.add_extra_intersections_on_ring(3, 1)
+  c.add_extra_intersections_on_ring(4, 2)
   c.add_fiber_from_exchange_to_extra_ir_in_third_ring()
   c.add_fiber_from_exchange_to_extra_ir_in_fourth_ring()
   c.add_driveway_nodes()
   c.add_copper_to_each_drw_from_closest_ir()
+
+  
   if c.check_if_all_driveways_connected():
+  
     print('Congratulations !!!!', 'All driveways have connection to exchange')
 
-  # c.plot()
+  print('total fiber in km: ', c.compute_total_fiber_in_km())
+  print('total copper in km: ', c.compute_total_copper_in_km())
+  pprint(c.estimate_speed_per_drw())
+  c.plot()
