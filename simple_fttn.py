@@ -188,7 +188,6 @@ class Circle:
         selected = next(dist_iter)
         s.G.add_edge(ir_node, selected, length=s.arcdist(selected, ir_node), type='copper_1')
 
-
   def plot_dotted_circle(s: Self, radius, colour='blue'):
     theta = np.linspace(0, 2 * np.pi, 300)
     x = s.origin[0] + radius * np.cos(theta)
@@ -211,8 +210,7 @@ class Circle:
     edge_type: str,
     colour: str,
     connection_style: str,
-    should_label=False,
-    label_pos=0.5
+    width: float=3,
   ):
     edges = [(u, v) for u, v, d in s.G.edges(data=True) if d.get('type') == edge_type]
     nx.draw_networkx_edges(
@@ -221,7 +219,7 @@ class Circle:
       edgelist=edges,edge_color=colour,
       connectionstyle=connection_style,
       arrows=True,
-      width=3
+      width=width
     )
     # if should_label:
       # labels = {(u, v): round(d['length'], 2) for u, v, d in s.G.edges(data=True) if 'length' in d and d.get('type') == edge_type}
@@ -248,13 +246,14 @@ class Circle:
     for n in c.G.nodes:
       if n == 'Exchange': node_sizes.append(200)
       elif n.startswith('I_R'): node_sizes.append(100)
-      else: node_sizes.append(20)
+      else: node_sizes.append(10)
 
     nx.draw_networkx_nodes(c.G, c.pos, node_size=node_sizes, node_color=node_colours)
-    s.plot_edges('fiber_1', 'orange', 'arc3,rad=0.3', True, 0.1)
-    s.plot_edges('fiber_2', 'violet', 'arc3,rad=-0.3', True, 0.1)
-    c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5', True, 0.1)
-    c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5', True, 0.1)
+    # s.plot_edges('fiber_1', 'orange', 'arc3,rad=0.3')
+    # s.plot_edges('fiber_2', 'violet', 'arc3,rad=-0.3')
+    c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5')
+    c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5')
+    c.plot_edges('copper_1', 'brown', 'arc3,rad=0.8', width=0.5)
     
     plt.savefig('simple_fttn.png')
     plt.show()
