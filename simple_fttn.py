@@ -42,26 +42,20 @@ class Circle:
     return round(dist, 3)
   
   def arcdist(s: Self, node1: str, node2: str):
-    # x1, y1 = s.pos[node1][0], s.pos[node1][1]
-    # x2, y2 = s.pos[node2][0], s.pos[node2][1]
-
-    # radius = np.hypot(
-    #   x1 - s.origin_x,
-    #   x2 - s.origin_y
-    # )
-    # dot = x1 * x2 + y1 * y2
-    # mag1 = math.sqrt(x1**2 + y1**2)
-    # mag2 = math.sqrt(x2**2 + y2**2)
-    # cos_theta = dot / (mag1 * mag2)
-    
-    # # Clamp value to avoid floating point issues
-    # cos_theta = max(min(cos_theta, 1.0), -1.0)
-    
-    # theta = math.acos(cos_theta)  # in radians
-    # arc_length = radius * theta
-
-    # return round(arc_length, 3)
-    return s.dist(node1, node2)
+    x1, y1 = s.pos[node1][0], s.pos[node1][1]
+    x2, y2 = s.pos[node2][0], s.pos[node2][1]
+    radius = np.hypot(
+      x1 - s.origin_x,
+      x2 - s.origin_y
+    )
+    dot = x1 * x2 + y1 * y2
+    mag1 = math.sqrt(x1**2 + y1**2)
+    mag2 = math.sqrt(x2**2 + y2**2)
+    cos_theta = dot / (mag1 * mag2)
+    cos_theta = max(min(cos_theta, 1.0), -1.0)
+    theta = math.acos(cos_theta) 
+    arc_length = radius * theta
+    return round(arc_length, 3)
   
   def add_intersection_nodes(s: Self):
     num_circles = len(s.radii_km)
@@ -210,7 +204,7 @@ class Circle:
 
       sorted_dists = sort_dict_by_values(dists)
       selected = next(iter(sorted_dists))
-      s.G.add_edge(selected, drw_node, length=s.dist(selected, drw_node), type='copper_1')
+      s.G.add_edge(selected, drw_node, length=s.arcdist(selected, drw_node), type='copper_1')
   
   def check_if_all_driveways_connected(s: Self):
     drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
@@ -230,7 +224,7 @@ class Circle:
   def estimate_speed(s: Self, x: float):
     x = x * 1000
     base_speed = 300.0   # Mbps at 0m
-    k = math.log(6) / 400.0  # ensures speed(400m) ≈ 50 Mbps
+    k = math.log(6) / 500.0  # ensures speed(500m) ≈ 50 Mbps
     return base_speed * math.exp(-k * x)
   
   def estimate_speed_per_drw(s: Self):
@@ -276,12 +270,20 @@ class Circle:
     edge_labels = {(u, v): round(d['length'], 1) for u, v, d in c.G.edges(data=True) if 'length' in d and d.get('type') == edge_type}
     # nx.draw_networkx_edge_labels(c.G, c.pos, edge_labels=edge_labels, font_size=7, label_pos=0.2)
 
+  def plot_radial_segments(self, color='lightgray', linewidth=1.0):
+    for i in range(self.segments_per_ring):
+        angle = (i / self.segments_per_ring) * 2 * np.pi
+        x0, y0 = self.origin
+        x1 = x0 + self.radii_km[-1] * np.cos(angle)
+        y1 = y0 + self.radii_km[-1] * np.sin(angle)
+        plt.plot([x0, x1], [y0, y1], color=color, linewidth=linewidth)
+
   def plot(s: Self):
     labels = {}
     for node in s.G.nodes:
       labels[node] = [float(round(c.pos[node][0], 3)), float(round(c.pos[node][1], 3))]
 
-    plt.figure(figsize=(10, 10))
+    plt.figure(figsize=(16, 16))
     plt.gca().set_aspect('equal', adjustable='box')
     s.plot_rings(colour='gray')
     node_colours = []
@@ -295,30 +297,37 @@ class Circle:
     # node_sizes = [200 if n == 'Exchange' else 20 for n in c.G.nodes]
     node_sizes = []
     for n in c.G.nodes:
-      if n == 'Exchange': node_sizes.append(200)
-      elif n.startswith('I_R'): node_sizes.append(100)
-      else: node_sizes.append(10)
-
+      if n.startswith('Exchange'): node_sizes.append(400)
+      elif n.startswith('I_R'): node_sizes.append(200)
+      else: node_sizes.append(50)
+    
     nx.draw_networkx_nodes(c.G, c.pos, node_size=node_sizes, node_color=node_colours)
+    s.plot_radial_segments()
+    
     # nx.draw_networkx_labels(c.G, c.pos, labels, font_size=10)
-    s.plot_edges('fiber_1', 'violet', 'arc3,rad=0.3', width=0.75)
-    s.plot_edges('fiber_2', 'violet', 'arc3,rad=-0.3', width=0.75)
-    c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5', width=0.75)
-    c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5', width=0.75)
-    c.plot_edges('copper_1', 'brown', 'arc3,rad=1.0', width=0.5)
 
+    s.plot_edges('fiber_1', 'orange', 'arc3,rad=0.3', width=1)
+    s.plot_edges('fiber_2', 'violet', 'arc3,rad=-0.3', width=1)
+    c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5', width=1)
+    c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5', width=0.75)
+    c.plot_edges('copper_1', 'brown', 'arc3,rad=1.0', width=0.75)
 
     legend_elements = [
-    Line2D([0], [0], color='violet', lw=2, label='Fiber Cable'),
+    Line2D([0], [0], color='lightgray', lw=2, label='Roads'),
+    Line2D([0], [0], color='orange', lw=2, label='Fiber Cable (Intersection)'),
+    Line2D([0], [0], color='violet', lw=2, label='Fiber Cable (Non Intersection)'),
     Line2D([0], [0], color='brown', lw=2, label='Copper Cable'),
+    Patch(facecolor='Black', edgecolor='black', label='Exchange'),
     Patch(facecolor='red', edgecolor='black', label='Driveway (DRW)'),
-    Patch(facecolor='orange', edgecolor='black', label='FTTN Node (Intersection)')
-]
+    Patch(facecolor='orange', edgecolor='black', label='FTTN Node (Intersection)'),
+    Patch(facecolor='Purple', edgecolor='black', label='FTTN Node (Not Intersection)')
+  ]
 
     # Add legend to the plot
     plt.legend(handles=legend_elements, loc='upper right', fontsize='large')
-    plt.savefig('simple_fttn.png')
-    plt.show()
+    plt.title('Connections from Exchange to FTTN (Intersection)', fontsize=20)
+    plt.savefig('simple_fttn.png', bbox_inches='tight', pad_inches=0, dpi=300)
+    # plt.show()
 
   
 if __name__ == '__main__':
