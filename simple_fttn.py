@@ -170,23 +170,36 @@ class Circle:
           angle_dot = start_angle + (i / 5) * (end_angle - start_angle)
           road_x = radius * np.cos(angle_dot)
           road_y = radius * np.sin(angle_dot)
+          road_x = road_x + s.origin_x
+          road_y = road_y + s.origin_y
           driveway_name = f"DRW_{radius}_{cross}_{i}"
           s.G.add_node(driveway_name, pos=(road_x, road_y))
           s.pos[driveway_name] = (road_x, road_y)
 
-  
-  def add_copper_from_ir_to_two_drw(s: Self):
-    ir = [n for n in s.G.nodes if n.startswith('I_R')]
-    drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
-    for ir_node in ir:
-      dists = {}
-      for drw_node in drw_nodes:
-        dists[drw_node] = s.dist(ir_node, drw_node)
+  # def add_copper_from_ir_to_two_drw(s: Self):
+  #   ir = [n for n in s.G.nodes if n.startswith('I_R')]
+  #   drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
+  #   for ir_node in ir:
+  #     dists = {}
+  #     for drw_node in drw_nodes:
+  #       dists[drw_node] = s.dist(ir_node, drw_node)
       
-      dist_iter = iter(sort_dict_by_values(dists))
-      for i in range(2):
-        selected = next(dist_iter)
-        s.G.add_edge(ir_node, selected, length=s.arcdist(selected, ir_node), type='copper_1')
+  #     dist_iter = iter(sort_dict_by_values(dists))
+  #     for i in range(2):
+  #       selected = next(dist_iter)
+  #       s.G.add_edge(ir_node, selected, length=s.arcdist(selected, ir_node), type='copper_1')
+
+  def add_copper_to_each_drw_from_closest_ir(s: Self):
+    ir_nodes = [n for n in s.G.nodes if n.startswith('I_R')]
+    drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
+
+    for drw_node in drw_nodes:
+      dists = {}
+      for ir_node in ir_nodes:
+        dists[ir_node] = s.dist(ir_node, drw_node)
+      selected = next(iter(sort_dict_by_values(dists)))
+      s.G.add_edge(selected, drw_node, length=s.arcdist(selected, ir_node), type='copper_1')
+      # break
 
   def plot_dotted_circle(s: Self, radius, colour='blue'):
     theta = np.linspace(0, 2 * np.pi, 300)
@@ -197,7 +210,6 @@ class Circle:
 
     angles = [180, 45]
     for angle in angles:
-
       label_x = s.origin[0] + radius * np.cos(angle)
       label_y = s.origin[1] + radius * np.sin(angle)
       plt.text(label_x, label_y, radius, fontsize=10, ha='left', va='bottom', color='black')
@@ -219,7 +231,8 @@ class Circle:
       edgelist=edges,edge_color=colour,
       connectionstyle=connection_style,
       arrows=True,
-      width=width
+      width=width,
+      arrowstyle='-|>'
     )
     # if should_label:
       # labels = {(u, v): round(d['length'], 2) for u, v, d in s.G.edges(data=True) if 'length' in d and d.get('type') == edge_type}
@@ -254,7 +267,6 @@ class Circle:
     c.plot_edges('fiber_3', 'violet', 'arc3,rad=0.5')
     c.plot_edges('fiber_4', 'violet', 'arc3,rad=-0.5')
     c.plot_edges('copper_1', 'brown', 'arc3,rad=0.8', width=0.5)
-    
     plt.savefig('simple_fttn.png')
     plt.show()
   
@@ -267,5 +279,5 @@ if __name__ == '__main__':
   c.add_fiber_from_exchange_to_extra_ir_in_third_ring()
   c.add_fiber_from_exchange_to_extra_ir_in_fourth_ring()
   c.add_driveway_nodes()
-  c.add_copper_from_ir_to_two_drw()
+  c.add_copper_to_each_drw_from_closest_ir()
   c.plot()
