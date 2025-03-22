@@ -201,6 +201,12 @@ class Circle:
       s.G.add_edge(selected, drw_node, length=s.arcdist(selected, ir_node), type='copper_1')
       # break
 
+  def check_if_all_driveways_connected(s: Self):
+    drw_nodes = [n for n in s.G.nodes if n.startswith('DRW_')]
+    out = []
+    for drw_node in drw_nodes: out += [nx.has_path(s.G, 'Exchange', drw_node)]
+    return all(out)
+
   def plot_dotted_circle(s: Self, radius, colour='blue'):
     theta = np.linspace(0, 2 * np.pi, 300)
     x = s.origin[0] + radius * np.cos(theta)
@@ -234,9 +240,6 @@ class Circle:
       width=width,
       arrowstyle='-|>'
     )
-    # if should_label:
-      # labels = {(u, v): round(d['length'], 2) for u, v, d in s.G.edges(data=True) if 'length' in d and d.get('type') == edge_type}
-      # nx.draw_networkx_edge_labels(s.G, s.pos, edge_labels=labels, font_size=7, label_pos=label_pos)
 
   def plot(s: Self):
     labels = {}
@@ -269,6 +272,7 @@ class Circle:
     c.plot_edges('copper_1', 'brown', 'arc3,rad=0.8', width=0.5)
     plt.savefig('simple_fttn.png')
     plt.show()
+
   
 if __name__ == '__main__':
   c = Circle()
@@ -280,4 +284,7 @@ if __name__ == '__main__':
   c.add_fiber_from_exchange_to_extra_ir_in_fourth_ring()
   c.add_driveway_nodes()
   c.add_copper_to_each_drw_from_closest_ir()
-  c.plot()
+  if c.check_if_all_driveways_connected():
+    print('Congratulations !!!!', 'All driveways have connection to exchange')
+
+  # c.plot()
