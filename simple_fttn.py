@@ -55,7 +55,7 @@ class Circle:
     cos_theta = max(min(cos_theta, 1.0), -1.0)
     theta = math.acos(cos_theta) 
     arc_length = radius * theta
-    return round(arc_length, 3)
+    return arc_length
   
   def add_intersection_nodes(s: Self):
     num_circles = len(s.radii_km)
@@ -224,7 +224,7 @@ class Circle:
   def estimate_speed(s: Self, x: float):
     x = x * 1000
     base_speed = 300.0   # Mbps at 0m
-    k = math.log(6) / 500.0  # ensures speed(500m) ≈ 50 Mbps
+    k = math.log(6) / 600.0  # ensures speed(600m) ≈ 50 Mbps
     return base_speed * math.exp(-k * x)
   
   def estimate_speed_per_drw(s: Self):
@@ -232,6 +232,8 @@ class Circle:
     speeds = {}
     for drw, dist in copper_edge_info:
       speeds[drw] = (s.estimate_speed(dist))
+    
+    s.speeds = speeds
     return speeds
 
   def plot_dotted_circle(s: Self, radius, colour='blue'):
@@ -329,6 +331,32 @@ class Circle:
     plt.savefig('simple_fttn.png', bbox_inches='tight', pad_inches=0, dpi=300)
     # plt.show()
 
+  def plot_speeds(s: Self):
+    s.estimate_speed_per_drw()
+    plt.figure(figsize=(16, 16))
+    plt.gca().set_aspect('equal', adjustable='box')
+    s.plot_rings(colour='gray')
+    
+    node_colours = []
+    for n in c.G.nodes:
+      if n == 'Exchange': node_colours.append('black')
+      elif n.startswith('I_R4_M'): node_colours.append('purple')
+      elif n.startswith('I_R3_M'): node_colours.append('purple')
+      elif n.startswith('I_R'): node_colours.append('orange')
+      elif n.startswith('DRW'): node_colours.append('red')
+    
+    node_sizes = []
+
+    for n in c.G.nodes:
+      if n.startswith('Exchange'): node_sizes.append(400)
+      elif n.startswith('I_R'): node_sizes.append(200)
+      else:
+        node_sizes.append(s.speeds[n] * 2)
+    
+    node_list = [n for n in s.G.nodes if n.startswith('DRW')]
+    nx.draw_networkx_nodes(c.G, c.pos, node_size=node_sizes, node_color=node_colours)
+    plt.savefig('speeds.png', bbox_inches='tight', pad_inches=0, dpi=300)
+    
   
 if __name__ == '__main__':
   c = Circle()
@@ -350,3 +378,5 @@ if __name__ == '__main__':
   print('total copper in km: ', c.compute_total_copper_in_km())
   pprint(c.estimate_speed_per_drw())
   c.plot()
+  c.plot_speeds()
+  print(c.estimate_speed(0.5))
