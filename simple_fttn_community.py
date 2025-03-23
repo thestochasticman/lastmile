@@ -207,7 +207,7 @@ class Circle:
       Line2D([0], [0], color='orange', lw=2, label='Fiber Cable (Intersection)'),
       Line2D([0], [0], color='violet', lw=2, label='Fiber Cable (Non Intersection)'),
       Line2D([0], [0], color='brown', lw=2, label='Copper Cable'),
-      Patch(facecolor='Black', edgecolor='black', label=s.exchange),
+      # Patch(facecolor='Black', edgecolor='black', label=s.exchange),
       Patch(facecolor='red', edgecolor='black', label='Driveway (DRW)'),
       Patch(facecolor='orange', edgecolor='black', label='FTTN Node (Intersection)'),
       Patch(facecolor='Purple', edgecolor='black', label='FTTN Node (Not Intersection)')
@@ -258,8 +258,9 @@ class Circle:
       y1 = y0 + self.radii_km[-1] * np.sin(angle)
       ax.plot([x0, x1], [y0, y1], color=color, linewidth=linewidth)
 
-  def plot(s: Self):
-    fig, ax = plt.subplots(figsize=(16, 16))
+  def plot(s: Self, fig=None, ax=None):
+    if fig == None:
+      fig, ax = plt.subplots(figsize=(16, 16))
     ax.set_aspect('equal', adjustable='box')
     nx.draw_networkx_nodes(s.G, s.pos, s.G.nodes, s.node_sizes, s.node_colours, ax=ax)
     s.plot_radial_segments(ax)
@@ -267,74 +268,90 @@ class Circle:
     
     s.plot_edges(ax, 'fiber_1', 'orange', 'arc3,rad=0.3', width=2)
     s.plot_edges(ax, 'fiber_2', 'violet', 'arc3,rad=-0.3', width=2)
-    c.plot_edges(ax, 'fiber_3', 'violet', 'arc3,rad=0.5', width=2)
-    c.plot_edges(ax, 'fiber_4', 'violet', 'arc3,rad=-0.5', width=2)
-    c.plot_edges(ax, 'copper_1', 'brown', 'arc3,rad=1.0', width=2)
+    s.plot_edges(ax, 'fiber_3', 'violet', 'arc3,rad=0.5', width=2)
+    s.plot_edges(ax, 'fiber_4', 'violet', 'arc3,rad=-0.5', width=2)
+    s.plot_edges(ax, 'copper_1', 'brown', 'arc3,rad=1.0', width=2)
     ax.legend(handles=s.legend_elements, loc='lower right', fontsize='16')
     ax.set_title('FTTN Peer 2 Peer + Copper Cable', fontsize=20)
     fig.text(0.5, 0.02, 'Fig 1.6', ha='right', fontsize=30, color='gray')
     fig.tight_layout()
-    fig.savefig('simple_fttn.png')
-    plt.show()
+    # fig.savefig('simple_fttn.png')
+    # plt.show()
 
-  def plot_speeds_histogram(s: Self):
-    fig, ax = plt.subplots(figsize=(16, 16))
-    # ax.set_aspect('equal', adjustable='box')
-    speeds = list(s.speeds.values())
-    # ax.hist(x=speeds, bins=5, histtype='stepfilled', facecolor='blue', linewidth=2, edgecolor='black')
-    counts, bins, patches = ax.hist(speeds, bins=30, color='skyblue', edgecolor='black', alpha=0.7)
-    for bin_edge in bins:
-      ax.axvline(bin_edge, color='gray', linestyle='--', linewidth=0.8)
-    ax.axvline(x=50, color='red', linestyle=':', linewidth=2)
-    plt.show()
-  
+
+def plot(c1: Circle, c2: Circle):
+  fig, ax = plt.subplots(figsize=(16, 16))
+  c1.plot(fig, ax)
+  c2.plot(fig, ax)
+  legend = c2.legend_elements
+  legend += [Patch(facecolor='Black', edgecolor='black', label=c1.exchange)]
+  legend += [Patch(facecolor='Black', edgecolor='black', label=c2.exchange)]
+  ax.legend(handles=legend, loc='lower right', fontsize='16')
+  plt.show()
+
+
+
 if __name__ == '__main__':
-  c = Circle()
-  c.add_intersection_nodes()
-  c.add_fiber_from_exchange_to_default_ir()
-  c.add_extra_intersections_on_ring(ring=2, per_segment=1)
-  c.add_extra_intersections_on_ring(ring=3, per_segment=1)
-  c.add_extra_intersections_on_ring(ring=4, per_segment=2)
-  c.add_fiber_from_exchange_to_extra_ir(ring=2)
-  c.add_fiber_from_exchange_to_extra_ir(ring=3)
-  c.add_fiber_from_exchange_to_extra_ir(ring=4)
-  c.add_driveway_nodes()
-  c.add_copper_to_each_drw_from_closest_ir()
-  if c.check_if_all_driveways_connected():
-    c.estimate_speed_per_drw()
+  c1 = Circle(origin=(6, 0))
+  c1.add_intersection_nodes()
+  c1.add_fiber_from_exchange_to_default_ir()
+  c1.add_extra_intersections_on_ring(ring=2, per_segment=1)
+  c1.add_extra_intersections_on_ring(ring=3, per_segment=1)
+  c1.add_extra_intersections_on_ring(ring=4, per_segment=2)
+
+  c1.add_fiber_from_exchange_to_extra_ir(ring=2)
+  c1.add_fiber_from_exchange_to_extra_ir(ring=3)
+  c1.add_fiber_from_exchange_to_extra_ir(ring=4)
+  c1.add_driveway_nodes()
+  c1.add_copper_to_each_drw_from_closest_ir()
+
+  c2 = Circle(origin=(0, 0))
+  c2.add_intersection_nodes()
+  c2.add_fiber_from_exchange_to_default_ir()
+  c2.add_extra_intersections_on_ring(ring=2, per_segment=1)
+  c2.add_extra_intersections_on_ring(ring=3, per_segment=1)
+  c2.add_extra_intersections_on_ring(ring=4, per_segment=2)
+  c2.add_fiber_from_exchange_to_extra_ir(ring=2)
+  c2.add_fiber_from_exchange_to_extra_ir(ring=3)
+  c2.add_fiber_from_exchange_to_extra_ir(ring=4)
+  c2.add_driveway_nodes()
+  c2.add_copper_to_each_drw_from_closest_ir()
+  
+  if c1.check_if_all_driveways_connected():
+    c1.estimate_speed_per_drw()
     print('Congratulations !!!!', 'All driveways have connection to exchange')
-    print('total fiber in km: ', c.compute_total_fiber_in_km())
-    print('total copper in km: ', c.compute_total_copper_in_km())
-    avg = sum(list(c.speeds.values())) / len(c.speeds)
+    print('total fiber in km: ', c1.compute_total_fiber_in_km())
+    print('total copper in km: ', c1.compute_total_copper_in_km())
+    avg = sum(list(c1.speeds.values())) / len(c1.speeds)
     print('average download:', avg)
-    print('total fiber cost', c.compute_total_fiber_cost())
-    print('total copper cost', c.compute_total_copper_cost())
-    print('fiber termination cost', c.compute_cost_fiber_termination())
-    print('copper termination cost', c.compute_cost_copper_termination())
+    print('total fiber cost', c1.compute_total_fiber_cost())
+    print('total copper cost', c1.compute_total_copper_cost())
+    print('fiber termination cost', c1.compute_cost_fiber_termination())
+    print('copper termination cost', c1.compute_cost_copper_termination())
 
     print(
       'total cost: ',
       sum(
         [
-          c.compute_total_fiber_cost(),
-          c.compute_total_copper_cost(),
-          c.compute_cost_fiber_termination(),
-          c.compute_cost_copper_termination()
+          c1.compute_total_fiber_cost(),
+          c1.compute_total_copper_cost(),
+          c1.compute_cost_fiber_termination(),
+          c1.compute_cost_copper_termination()
         ]
       )
     )
-  c.plot_speeds_histogram()
-  
-  # c.plot_speeds_histogram()
-  
-
-
-  # c.estimate_speed_per_drw()
-
-  # for node in c.speeds:
-  #   if c.speeds[node] < 50:
-  #     print(node, c.speeds[node])
-
-  # plt.figure(figsize=(16, 16))
-  # plt.hist(c.speeds.values())
-  # plt.show()
+  if c1.check_if_all_driveways_connected() and c2.check_if_all_driveways_connected():
+    c1.estimate_speed_per_drw()
+    c2.estimate_speed_per_drw()
+    print('Congratulations !!!!', 'All driveways have connection to exchange')
+    print('total fiber in km: ', c1.compute_total_fiber_in_km() + c2.compute_total_fiber_in_km())
+    print('total copper in km: ', c1.compute_total_copper_in_km() + c2.compute_total_copper_in_km())
+    avg_1 = sum(list(c1.speeds.values())) / len(c1.speeds)
+    avg_2 = sum(list(c2.speeds.values())) / len(c2.speeds)
+    print('average download:', (avg_1 + avg_2)/2)
+    print('total fiber cost', c1.compute_total_fiber_cost() + c2.compute_total_fiber_cost())
+    print('total copper cost', c1.compute_total_copper_cost() + c2.compute_total_copper_cost())
+    print('fiber termination cost', c1.compute_cost_fiber_termination() + c2.compute_cost_fiber_termination())
+    print('copper termination cost', c1.compute_cost_copper_termination() + c2.compute_cost_copper_termination())
+    plot(c1, c2)
+    
