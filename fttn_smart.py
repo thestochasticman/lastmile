@@ -308,7 +308,7 @@ if __name__ == '__main__':
           c.compute_total_copper_cost(),
           c.compute_cost_fiber_termination(),
           c.compute_cost_copper_termination(),
-          c.compute_splitting_cost(
+          c.compute_splitting_cost()
         ]
       )
     )
